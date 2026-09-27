@@ -14,19 +14,13 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import UndoIcon from '@mui/icons-material/Undo';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type { PrepProcedure } from '../../types/procedure';
+import { fmtDateTime } from '../../utils/format';
 
 export interface ProcedureTimelineProps {
   items: PrepProcedure[];
   onFinish?: (id: string) => void;
   onRollback?: (id: string) => void;
   onOpenPhoto?: (procedureId: string) => void;
-}
-
-function fmtTime(ts?: number): string {
-  if (!ts) return '—';
-  const d = new Date(ts);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /**
@@ -109,8 +103,8 @@ export function ProcedureTimeline({ items, onFinish, onRollback, onOpenPhoto }: 
                   <Typography variant="body2">
                     环境：{node.tempC} ℃ / RH {node.rh} %
                   </Typography>
-                  <Typography variant="body2">开始：{fmtTime(node.startedAt)}</Typography>
-                  <Typography variant="body2">结束：{fmtTime(node.finishedAt)}</Typography>
+                  <Typography variant="body2">开始：{fmtDateTime(node.startedAt)}</Typography>
+                  <Typography variant="body2">结束：{fmtDateTime(node.finishedAt)}</Typography>
                   <Typography variant="body2">
                     影像：前 {node.photoBeforeIds.length} 张 / 后 {node.photoAfterIds.length} 张
                   </Typography>

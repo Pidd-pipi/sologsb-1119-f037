@@ -7,7 +7,7 @@ import { makeSketchDataUrl } from '../types/photo';
 import { newId } from './id';
 
 /** 当前数据结构版本，写入 localStorage 便于回显 */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const DB_NAME = 'gbfossilprep';
 export const LS_VERSION_KEY = 'gbfossilprep:db-version';
 
@@ -54,6 +54,30 @@ class FossilPrepDB extends Dexie {
             if (row.lowThreshold === undefined) row.lowThreshold = 1;
           });
       });
+    // v3：标本增加交接记录 handover（交付统一走「办理交付」入口，归档后只读）
+    this.version(3)
+      .stores({
+        specimens: 'id, specimenNo, taxon, locality, status, createdAt',
+        procedures: 'id, specimenId, seq, stepType, state, startedAt',
+        supplies: 'id, kind, lotNo, name, openedAt',
+        photos: 'id, specimenId, procedureId, stage, capturedAt',
+      })
+      .upgrade(async (tx) => {
+        // 历史上被直接标成「已交付」的标本没有交接记录，迁移时补占位记录；
+        // 未交付标本不改动，升级后仍可正常维护
+        await tx
+          .table('specimens')
+          .toCollection()
+          .modify((row: any) => {
+            if (row.status === '已交付' && !row.handover) {
+              row.handover = {
+                deliverer: '（历史档案迁移补录）',
+                receiver: '（历史档案迁移补录）',
+                handoverAt: row.createdAt ?? Date.now(),
+              };
+            }
+          });
+      });
   }
 }
 
@@ -86,6 +110,7 @@ export async function ensureSeedData(): Promise<void> {
   const day = 24 * 3600 * 1000;
   const specimenId = newId('spm');
   const specimenId2 = newId('spm');
+  const specimenId3 = newId('spm');
 
   const specimens: Specimen[] = [
     {
@@ -115,6 +140,25 @@ export async function ensureSeedData(): Promise<void> {
       storageBox: 'B 区 1 匣 4 格',
       status: '待清修',
       createdAt: now - 5 * day,
+    },
+    {
+      id: specimenId3,
+      specimenNo: 'FP-2023-0117',
+      taxon: 'Keichousaurus hui（贵州龙）',
+      horizon: '中三叠统法郎组',
+      locality: '贵州兴义',
+      lithology: '灰黑色泥晶灰岩',
+      matrixHardness: 3.5,
+      dimensions: '150×80×20',
+      weight: 320,
+      storageBox: 'C 区 2 匣 1 格',
+      status: '已交付',
+      handover: {
+        deliverer: '林砚秋',
+        receiver: '省地质博物馆藏品部',
+        handoverAt: now - 30 * day,
+      },
+      createdAt: now - 90 * day,
     },
   ];
 
@@ -157,6 +201,46 @@ export async function ensureSeedData(): Promise<void> {
       operator: '林砚秋',
       startedAt: now - 6 * day,
       state: 'pending',
+    },
+    {
+      id: newId('prc'),
+      specimenId: specimenId3,
+      stepType: '清修',
+      nodeName: '背椎序列精修',
+      seq: 1,
+      tools: ['气动笔', '软毛刷'],
+      abrasive: '1200 目',
+      adhesive: '',
+      adhesiveConc: 0,
+      durationMin: 210,
+      tempC: 21,
+      rh: 50,
+      photoBeforeIds: [],
+      photoAfterIds: [],
+      operator: '林砚秋',
+      startedAt: now - 80 * day,
+      state: 'done',
+      finishedAt: now - 80 * day + 210 * 60000,
+    },
+    {
+      id: newId('prc'),
+      specimenId: specimenId3,
+      stepType: '加固',
+      nodeName: '骨面整体渗透加固',
+      seq: 2,
+      tools: ['渗透滴管'],
+      abrasive: '',
+      adhesive: 'Paraloid B-72',
+      adhesiveConc: 3,
+      durationMin: 120,
+      tempC: 22,
+      rh: 47,
+      photoBeforeIds: [],
+      photoAfterIds: [],
+      operator: '林砚秋',
+      startedAt: now - 45 * day,
+      state: 'done',
+      finishedAt: now - 45 * day + 120 * 60000,
     },
   ];
 

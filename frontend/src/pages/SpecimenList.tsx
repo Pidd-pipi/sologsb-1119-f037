@@ -288,8 +288,9 @@ export default function SpecimenList() {
               label="状态"
               value={draft.status}
               onChange={(e) => setDraft({ ...draft, status: e.target.value as SpecimenStatus })}
+              helperText="「已交付」只能在详情页通过「办理交付」登记"
             >
-              {SPECIMEN_STATUSES.map((s) => (
+              {SPECIMEN_STATUSES.filter((s) => s !== '已交付').map((s) => (
                 <MenuItem key={s} value={s}>
                   {s}
                 </MenuItem>

@@ -8,6 +8,7 @@ import Box from '@mui/material/Box';
 import type { ReactNode } from 'react';
 import type { Specimen } from '../../types/specimen';
 import { hardnessLabel, mmToInch } from '../../utils/unitConvert';
+import { fmtDateTime } from '../../utils/format';
 
 export interface SpecimenCardProps {
   item: Specimen;
@@ -51,6 +52,11 @@ export function SpecimenCard({ item, onOpen, footer, selected = false }: Specime
       <Typography variant="body2" color="text.secondary">
         岩性：{item.lithology}
       </Typography>
+      {item.handover ? (
+        <Typography variant="body2" color="success.main">
+          交接：{item.handover.deliverer} → {item.handover.receiver} · {fmtDateTime(item.handover.handoverAt)}
+        </Typography>
+      ) : null}
       {footer ? <Box sx={{ mt: 1 }}>{footer}</Box> : null}
     </CardContent>
   );

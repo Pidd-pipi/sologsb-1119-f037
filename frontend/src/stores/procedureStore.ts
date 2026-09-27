@@ -3,6 +3,14 @@ import { db } from '../utils/db';
 import { newId } from '../utils/id';
 import type { PrepProcedure, PrepProcedureDraft } from '../types/procedure';
 
+/** 归档标本的工序只读保护：写操作前校验所属标本状态 */
+async function assertSpecimenEditable(specimenId: string): Promise<void> {
+  const specimen = await db.specimens.get(specimenId);
+  if (specimen?.status === '已交付') {
+    throw new Error('标本已交付归档，工序仅可查看');
+  }
+}
+
 interface ProcedureState {
   items: PrepProcedure[];
   loaded: boolean;
@@ -23,22 +31,29 @@ export const useProcedureStore = create<ProcedureState>((set, get) => ({
     set({ items, loaded: true });
   },
   async add(draft) {
+    await assertSpecimenEditable(draft.specimenId);
     const record: PrepProcedure = { ...draft, id: newId('prc') };
     await db.procedures.put(record);
     set({ items: [...get().items, record] });
     return record;
   },
   async finish(id) {
+    const target = get().items.find((it) => it.id === id);
+    if (target) await assertSpecimenEditable(target.specimenId);
     const patch: Partial<PrepProcedure> = { state: 'done', finishedAt: Date.now() };
     await db.procedures.update(id, patch);
     set({ items: get().items.map((it) => (it.id === id ? { ...it, ...patch } : it)) });
   },
   async rollback(id) {
+    const target = get().items.find((it) => it.id === id);
+    if (target) await assertSpecimenEditable(target.specimenId);
     const patch: Partial<PrepProcedure> = { state: 'rolledback', finishedAt: undefined };
     await db.procedures.update(id, patch);
     set({ items: get().items.map((it) => (it.id === id ? { ...it, ...patch } : it)) });
   },
   async remove(id) {
+    const target = get().items.find((it) => it.id === id);
+    if (target) await assertSpecimenEditable(target.specimenId);
     await db.procedures.delete(id);
     set({ items: get().items.filter((it) => it.id !== id) });
   },

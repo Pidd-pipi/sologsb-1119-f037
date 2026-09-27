@@ -18,6 +18,7 @@ import { usePrepProgress } from '../hooks/usePrepProgress';
 import { ProcedureTimeline } from '../components/common/ProcedureTimeline';
 import { MeasureField } from '../components/common/MeasureField';
 import { STEP_FIELD_MAP, STEP_TYPES, type StepType } from '../types/procedure';
+import { isSpecimenDelivered } from '../types/specimen';
 import { db } from '../utils/db';
 import { newId } from '../utils/id';
 import { makeSketchDataUrl, type PrepPhoto } from '../types/photo';
@@ -52,10 +53,15 @@ export default function ProcedureForm() {
   const nextSeq = progress.list.length === 0 ? 1 : Math.max(...progress.list.map((it) => it.seq)) + 1;
 
   const specimen = useMemo(() => specimens.find((it) => it.id === specimenId), [specimens, specimenId]);
+  const delivered = isSpecimenDelivered(specimen);
 
   const submit = async () => {
     if (!specimenId) {
       setError('请先选择标本');
+      return;
+    }
+    if (delivered) {
+      setError('该标本已交付归档，不能再追加工序节点');
       return;
     }
     if (!nodeName.trim()) {
@@ -146,6 +152,11 @@ export default function ProcedureForm() {
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={1.5}>
             {error ? <Alert severity="error" data-testid="procedure-error">{error}</Alert> : null}
+            {delivered ? (
+              <Alert severity="warning" data-testid="procedure-archived">
+                该标本已交付归档，工序仅可查看，追加入口已停用。可切换其它未交付标本继续登记。
+              </Alert>
+            ) : null}
             <TextField
               select
               size="small"
@@ -159,6 +170,7 @@ export default function ProcedureForm() {
               {specimens.map((it) => (
                 <MenuItem key={it.id} value={it.id}>
                   {it.specimenNo} · {it.taxon}
+                  {isSpecimenDelivered(it) ? '（已交付）' : ''}
                 </MenuItem>
               ))}
             </TextField>
@@ -313,7 +325,7 @@ export default function ProcedureForm() {
             />
 
             <Stack direction="row" spacing={1}>
-              <Button variant="contained" onClick={submit}>
+              <Button variant="contained" disabled={delivered} onClick={submit}>
                 保存节点
               </Button>
               <Button onClick={() => navigate('/procedures/new')}>清空重填</Button>
@@ -333,14 +345,30 @@ export default function ProcedureForm() {
           ) : null}
           <ProcedureTimeline
             items={progress.list}
-            onFinish={async (pid) => {
-              await finish(pid);
-              setToast('节点已完成');
-            }}
-            onRollback={async (pid) => {
-              await rollback(pid);
-              setToast('节点已回退');
-            }}
+            onFinish={
+              delivered
+                ? undefined
+                : async (pid) => {
+                    try {
+                      await finish(pid);
+                      setToast('节点已完成');
+                    } catch (err) {
+                      setToast(err instanceof Error ? err.message : '操作失败');
+                    }
+                  }
+            }
+            onRollback={
+              delivered
+                ? undefined
+                : async (pid) => {
+                    try {
+                      await rollback(pid);
+                      setToast('节点已回退');
+                    } catch (err) {
+                      setToast(err instanceof Error ? err.message : '操作失败');
+                    }
+                  }
+            }
           />
         </Paper>
       </Box>
