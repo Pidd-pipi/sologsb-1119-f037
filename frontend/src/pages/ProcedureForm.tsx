@@ -18,6 +18,7 @@ import { usePrepProgress } from '../hooks/usePrepProgress';
 import { ProcedureTimeline } from '../components/common/ProcedureTimeline';
 import { MeasureField } from '../components/common/MeasureField';
 import { STEP_FIELD_MAP, STEP_TYPES, type StepType } from '../types/procedure';
+import { isSpecimenArchived } from '../types/specimen';
 import { db } from '../utils/db';
 import { newId } from '../utils/id';
 import { makeSketchDataUrl, type PrepPhoto } from '../types/photo';
@@ -52,10 +53,15 @@ export default function ProcedureForm() {
   const nextSeq = progress.list.length === 0 ? 1 : Math.max(...progress.list.map((it) => it.seq)) + 1;
 
   const specimen = useMemo(() => specimens.find((it) => it.id === specimenId), [specimens, specimenId]);
+  const archived = specimen ? isSpecimenArchived(specimen) : false;
 
   const submit = async () => {
     if (!specimenId) {
       setError('请先选择标本');
+      return;
+    }
+    if (archived) {
+      setError('该标本已交付归档，不能追加工序节点');
       return;
     }
     if (!nodeName.trim()) {
@@ -145,6 +151,11 @@ export default function ProcedureForm() {
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 420px' }, gap: 2 }}>
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={1.5}>
+            {archived ? (
+              <Alert severity="warning" data-testid="archived-procedure-warning">
+                「{specimen?.specimenNo}」已交付归档，工序时间线只读，不能再追加节点。
+              </Alert>
+            ) : null}
             {error ? <Alert severity="error" data-testid="procedure-error">{error}</Alert> : null}
             <TextField
               select
@@ -162,6 +173,9 @@ export default function ProcedureForm() {
                 </MenuItem>
               ))}
             </TextField>
+          </Stack>
+          <Box component="fieldset" disabled={archived} sx={{ border: 'none', m: 0, p: 0, minWidth: 0, mt: 1.5 }}>
+          <Stack spacing={1.5}>
 
             <Stack direction="row" spacing={1.5}>
               <TextField
@@ -313,12 +327,13 @@ export default function ProcedureForm() {
             />
 
             <Stack direction="row" spacing={1}>
-              <Button variant="contained" onClick={submit}>
+              <Button variant="contained" onClick={submit} disabled={archived}>
                 保存节点
               </Button>
               <Button onClick={() => navigate('/procedures/new')}>清空重填</Button>
             </Stack>
           </Stack>
+          </Box>
         </Paper>
 
         <Paper variant="outlined" sx={{ p: 2 }}>
@@ -333,14 +348,31 @@ export default function ProcedureForm() {
           ) : null}
           <ProcedureTimeline
             items={progress.list}
-            onFinish={async (pid) => {
-              await finish(pid);
-              setToast('节点已完成');
-            }}
-            onRollback={async (pid) => {
-              await rollback(pid);
-              setToast('节点已回退');
-            }}
+            readOnly={archived}
+            onFinish={
+              archived
+                ? undefined
+                : async (pid) => {
+                    try {
+                      await finish(pid);
+                      setToast('节点已完成');
+                    } catch (err) {
+                      setToast(err instanceof Error ? err.message : '操作失败');
+                    }
+                  }
+            }
+            onRollback={
+              archived
+                ? undefined
+                : async (pid) => {
+                    try {
+                      await rollback(pid);
+                      setToast('节点已回退');
+                    } catch (err) {
+                      setToast(err instanceof Error ? err.message : '操作失败');
+                    }
+                  }
+            }
           />
         </Paper>
       </Box>

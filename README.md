@@ -62,16 +62,16 @@ sologsb-1119/
         ├── components/common/{ProcedureTimeline,BeforeAfterSlider,SpecimenCard,MeasureField}.tsx
         ├── hooks/{useSpecimenSearch,usePrepProgress}.ts
         ├── pages/{SpecimenList,SpecimenDetail,ProcedureForm,SupplyList,CompareView}.tsx
-        └── utils/{db,unitConvert,id}.ts
+        └── utils/{db,unitConvert,id,delivery}.ts
 ```
 
 ## 页面与路由
 
 | 路由 | 页面 | 消费模型 |
 | --- | --- | --- |
-| `/specimens` | 标本台账：按号/分类/产地/状态筛选，状态分栏 | Specimen |
-| `/specimens/:id` | 标本详情 + 工序时间线 + 影像留痕 | Specimen、PrepProcedure、PrepPhoto |
-| `/procedures/new` | 新建工序节点：按类型动态出工具/磨料/胶种字段，序号跳号报错 | PrepProcedure、Specimen |
+| `/specimens` | 标本台账：按号/分类/产地/状态筛选，状态分栏，已交付卡片保留交接信息 | Specimen |
+| `/specimens/:id` | 标本详情 + 工序时间线 + 影像留痕 + 统一交付入口（卡点核查 / 交接登记 / 归档只读） | Specimen、PrepProcedure、PrepPhoto |
+| `/procedures/new` | 新建工序节点：按类型动态出工具/磨料/胶种字段，序号跳号报错；已归档标本禁止追加 | PrepProcedure、Specimen |
 | `/supplies` | 工具材料台账：按种类分组、批号追溯、低量高亮、领用登记 | SupplyLot |
 | `/compare/:specimenId` | 前后对照滑块联看 + 导出对照说明文本 | PrepPhoto、PrepProcedure |
 
@@ -79,16 +79,19 @@ sologsb-1119/
 
 ## 数据存储说明
 
-- 数据库名 `gbfossilprep`，当前结构版本 **v2**（`localStorage['gbfossilprep:db-version']` 记录）。
-- 四张表：`specimens`（标本）、`procedures`（修复工序）、`supplies`（工具材料批次 + 领用记录）、`photos`（修复影像 dataUrl 独立表）。
+- 数据库名 `gbfossilprep`，当前结构版本 **v3**（`localStorage['gbfossilprep:db-version']` 记录）。
+- 四张表：`specimens`（标本，含交付人/接收单位/交接时间）、`procedures`（修复工序）、`supplies`（工具材料批次 + 领用记录）、`photos`（修复影像 dataUrl 独立表）。
 - v1 → v2 迁移：为老数据补齐 `state`、`tools`、`photoBeforeIds/AfterIds`、`issues`、`lowThreshold` 字段并新增索引。
+- v2 → v3 迁移：为标本补齐 `deliveredBy`、`receivingUnit`、`deliveredAt` 交接字段；历史「已交付」标本保持归档只读（升级前未登记的交接信息留空并在界面标注），未交付标本升级后仍可正常维护。
 - 容器无状态、不挂载命名卷；换浏览器或清空站点数据即回到初始示范数据。
-- 首次打开会灌入 2 件示范标本、2 个工序节点、4 个材料批次与 2 张留痕影像，便于直接查看。
+- 首次打开会灌入 3 件示范标本（含 1 件已交付归档件）、4 个工序节点、4 个材料批次与 4 张留痕影像，便于直接查看。
 
 ## 功能要点
 
+- **统一交付入口**：「已交付」状态不可直接选择；从详情页「办理交付」进入，节点未全部完成（待办 / 已回退 / 无节点 / 序号跳号）时逐条指出卡点，全部完成后登记交付人、接收单位与交接时间方可归档。
+- **归档只读**：交付归档后标本资料、工序节点与时间线仅可查看，追加工序入口停用；台账卡片与详情页保留交付人、接收单位、交接时间等交接信息。
 - **工序序号不跳号**：新建节点时若序号大于「当前最大序号 + 1」直接报错并给出建议序号。
-- **工序回退**：已完成节点可回退，回退后计入待办与回退计数。
+- **工序回退**：已完成节点可回退，回退后计入待办与回退计数，并阻断交付。
 - **低量高亮**：在库 ≤ 低量阈值的批次整行高亮并标注「低量」，剩余保质期为负时红色标注。
 - **批号追溯**：按批号片段检索，行内直接展示该批次的领用明细。
 - **前后对照**：滑块拖动联看修复前后影像，支持缩放与标注泡点，可导出/复制对照说明文本。

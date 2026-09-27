@@ -21,8 +21,9 @@ import { useProcedureStore } from '../stores/procedureStore';
 import { useSpecimenSearch } from '../hooks/useSpecimenSearch';
 import { SpecimenCard } from '../components/common/SpecimenCard';
 import { MeasureField } from '../components/common/MeasureField';
-import { SPECIMEN_STATUSES, type SpecimenDraft, type SpecimenStatus } from '../types/specimen';
+import { OPEN_SPECIMEN_STATUSES, SPECIMEN_STATUSES, isSpecimenArchived, type SpecimenDraft, type SpecimenStatus } from '../types/specimen';
 import { hardnessLabel, mmToInch } from '../utils/unitConvert';
+import { formatDateTime } from '../utils/delivery';
 
 const EMPTY_DRAFT: SpecimenDraft = {
   specimenNo: '',
@@ -176,15 +177,27 @@ export default function SpecimenList() {
             </Stack>
             {col.rows.map((item) => {
               const p = progressOf(item.id);
+              const archived = isSpecimenArchived(item);
               return (
                 <SpecimenCard
                   key={item.id}
                   item={item}
                   onOpen={(id) => navigate(`/specimens/${id}`)}
                   footer={
-                    <Typography variant="caption" color="text.secondary">
-                      工序 {p.done}/{p.total} · {hardnessLabel(item.matrixHardness).label}
-                    </Typography>
+                    archived ? (
+                      <Stack spacing={0.25}>
+                        <Typography variant="caption" color="text.secondary">
+                          工序 {p.done}/{p.total} · 交接时间 {formatDateTime(item.deliveredAt)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap title={`交付人 ${item.deliveredBy || '未登记'} · 接收单位 ${item.receivingUnit || '未登记'}`}>
+                          交付人 {item.deliveredBy || '—'} · 接收单位 {item.receivingUnit || '—'}
+                        </Typography>
+                      </Stack>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">
+                        工序 {p.done}/{p.total} · {hardnessLabel(item.matrixHardness).label}
+                      </Typography>
+                    )
                   }
                 />
               );
@@ -288,8 +301,9 @@ export default function SpecimenList() {
               label="状态"
               value={draft.status}
               onChange={(e) => setDraft({ ...draft, status: e.target.value as SpecimenStatus })}
+              helperText="交付需在标本详情页通过交付入口统一办理"
             >
-              {SPECIMEN_STATUSES.map((s) => (
+              {OPEN_SPECIMEN_STATUSES.map((s) => (
                 <MenuItem key={s} value={s}>
                   {s}
                 </MenuItem>

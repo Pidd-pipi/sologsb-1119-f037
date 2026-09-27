@@ -14,26 +14,28 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import UndoIcon from '@mui/icons-material/Undo';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type { PrepProcedure } from '../../types/procedure';
+import { formatDateTime } from '../../utils/delivery';
 
 export interface ProcedureTimelineProps {
   items: PrepProcedure[];
   onFinish?: (id: string) => void;
   onRollback?: (id: string) => void;
   onOpenPhoto?: (procedureId: string) => void;
-}
-
-function fmtTime(ts?: number): string {
-  if (!ts) return '—';
-  const d = new Date(ts);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  /** 归档后只读：不渲染完成 / 回退操作 */
+  readOnly?: boolean;
 }
 
 /**
  * 纵向工序节点流：步骤图标、状态、耗时、环境参数折叠区。
  * 被标本详情页、工序录入页消费。
  */
-export function ProcedureTimeline({ items, onFinish, onRollback, onOpenPhoto }: ProcedureTimelineProps) {
+export function ProcedureTimeline({
+  items,
+  onFinish,
+  onRollback,
+  onOpenPhoto,
+  readOnly = false,
+}: ProcedureTimelineProps) {
   const [expanded, setExpanded] = useState<string | null>(items[0]?.id ?? null);
 
   if (items.length === 0) {
@@ -48,6 +50,9 @@ export function ProcedureTimeline({ items, onFinish, onRollback, onOpenPhoto }: 
 
   return (
     <Stack spacing={1} data-testid="procedure-timeline">
+      {readOnly ? (
+        <Chip size="small" color="default" variant="outlined" label="档案已归档，工序时间线仅可查看" sx={{ alignSelf: 'flex-start' }} />
+      ) : null}
       {items.map((node, index) => {
         const isDone = node.state === 'done';
         const open = expanded === node.id;
@@ -78,12 +83,12 @@ export function ProcedureTimeline({ items, onFinish, onRollback, onOpenPhoto }: 
                   耗时 {node.durationMin} min · 责任人 {node.operator}
                 </Typography>
                 <Box sx={{ flex: 1 }} />
-                {!isDone && onFinish ? (
+                {!readOnly && !isDone && onFinish ? (
                   <Button size="small" variant="contained" onClick={() => onFinish(node.id)}>
                     完成节点
                   </Button>
                 ) : null}
-                {isDone && onRollback ? (
+                {!readOnly && isDone && onRollback ? (
                   <Button size="small" color="warning" startIcon={<UndoIcon />} onClick={() => onRollback(node.id)}>
                     回退节点
                   </Button>
@@ -109,8 +114,8 @@ export function ProcedureTimeline({ items, onFinish, onRollback, onOpenPhoto }: 
                   <Typography variant="body2">
                     环境：{node.tempC} ℃ / RH {node.rh} %
                   </Typography>
-                  <Typography variant="body2">开始：{fmtTime(node.startedAt)}</Typography>
-                  <Typography variant="body2">结束：{fmtTime(node.finishedAt)}</Typography>
+                  <Typography variant="body2">开始：{formatDateTime(node.startedAt)}</Typography>
+                  <Typography variant="body2">结束：{formatDateTime(node.finishedAt)}</Typography>
                   <Typography variant="body2">
                     影像：前 {node.photoBeforeIds.length} 张 / 后 {node.photoAfterIds.length} 张
                   </Typography>

@@ -7,7 +7,7 @@ import { makeSketchDataUrl } from '../types/photo';
 import { newId } from './id';
 
 /** 当前数据结构版本，写入 localStorage 便于回显 */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const DB_NAME = 'gbfossilprep';
 export const LS_VERSION_KEY = 'gbfossilprep:db-version';
 
@@ -54,6 +54,26 @@ class FossilPrepDB extends Dexie {
             if (row.lowThreshold === undefined) row.lowThreshold = 1;
           });
       });
+    // v3：标本增加交付人 / 接收单位 / 交接时间字段（不新增索引，stores 声明保持一致）。
+    // 已交付的历史档案保持只读归档状态，交接信息缺失时留空，由界面标注为升级前档案；
+    // 未交付标本升级后仍可正常维护工序并从交付入口办理。
+    this.version(3)
+      .stores({
+        specimens: 'id, specimenNo, taxon, locality, status, createdAt',
+        procedures: 'id, specimenId, seq, stepType, state, startedAt',
+        supplies: 'id, kind, lotNo, name, openedAt',
+        photos: 'id, specimenId, procedureId, stage, capturedAt',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('specimens')
+          .toCollection()
+          .modify((row: any) => {
+            if (row.deliveredBy === undefined) row.deliveredBy = '';
+            if (row.receivingUnit === undefined) row.receivingUnit = '';
+            if (row.deliveredAt === undefined) row.deliveredAt = undefined;
+          });
+      });
   }
 }
 
@@ -77,7 +97,7 @@ export function readDbVersion(): number {
   }
 }
 
-/** 首次进入时灌入一条示范档案，保证页面非空壳 */
+/** 首次进入时灌入示范档案，保证页面非空壳 */
 export async function ensureSeedData(): Promise<void> {
   const count = await db.specimens.count();
   if (count > 0) return;
@@ -86,6 +106,7 @@ export async function ensureSeedData(): Promise<void> {
   const day = 24 * 3600 * 1000;
   const specimenId = newId('spm');
   const specimenId2 = newId('spm');
+  const specimenId3 = newId('spm');
 
   const specimens: Specimen[] = [
     {
@@ -116,7 +137,65 @@ export async function ensureSeedData(): Promise<void> {
       status: '待清修',
       createdAt: now - 5 * day,
     },
+    {
+      id: specimenId3,
+      specimenNo: 'FP-2024-0007',
+      taxon: 'Lycoptera davidi（戴氏狼鳍鱼）',
+      horizon: '上侏罗统义县组',
+      locality: '辽宁凌源',
+      lithology: '浅灰色页岩',
+      matrixHardness: 3.0,
+      dimensions: '95×60×12',
+      weight: 86,
+      storageBox: 'C 区 2 匣 1 格',
+      status: '已交付',
+      deliveredBy: '林砚秋',
+      receivingUnit: '古哺乳动物研究室',
+      deliveredAt: now - 20 * day,
+      createdAt: now - 48 * day,
+    },
   ];
+
+  const deliveredProc1: PrepProcedure = {
+    id: newId('prc'),
+    specimenId: specimenId3,
+    stepType: '清修',
+    nodeName: '对开板围岩精修',
+    seq: 1,
+    tools: ['剔针', '软毛刷'],
+    abrasive: '1200 目',
+    adhesive: '',
+    adhesiveConc: 0,
+    durationMin: 120,
+    tempC: 22,
+    rh: 46,
+    photoBeforeIds: [],
+    photoAfterIds: [],
+    operator: '林砚秋',
+    startedAt: now - 30 * day,
+    state: 'done',
+    finishedAt: now - 30 * day + 120 * 60000,
+  };
+  const deliveredProc2: PrepProcedure = {
+    id: newId('prc'),
+    specimenId: specimenId3,
+    stepType: '加固',
+    nodeName: '尾鳍裂隙滴渗加固',
+    seq: 2,
+    tools: ['渗透滴管'],
+    abrasive: '',
+    adhesive: 'Paraloid B-72',
+    adhesiveConc: 3,
+    durationMin: 60,
+    tempC: 23,
+    rh: 45,
+    photoBeforeIds: [],
+    photoAfterIds: [],
+    operator: '林砚秋',
+    startedAt: now - 26 * day,
+    state: 'done',
+    finishedAt: now - 26 * day + 60 * 60000,
+  };
 
   const procedures: PrepProcedure[] = [
     {
@@ -158,7 +237,30 @@ export async function ensureSeedData(): Promise<void> {
       startedAt: now - 6 * day,
       state: 'pending',
     },
+    deliveredProc1,
+    deliveredProc2,
   ];
+
+  const deliveredBefore: PrepPhoto = {
+    id: newId('pho'),
+    specimenId: specimenId3,
+    procedureId: deliveredProc1.id,
+    stage: 'before',
+    caption: '清修前 · 对开板围岩覆盖鱼体',
+    dataUrl: makeSketchDataUrl('清修前 · FP-2024-0007', '#5a5048'),
+    capturedAt: now - 30 * day,
+  };
+  const deliveredAfter: PrepPhoto = {
+    id: newId('pho'),
+    specimenId: specimenId3,
+    procedureId: deliveredProc1.id,
+    stage: 'after',
+    caption: '清修后 · 鱼体骨骼完整出露',
+    dataUrl: makeSketchDataUrl('清修后 · FP-2024-0007', '#3c4a3f'),
+    capturedAt: now - 29 * day,
+  };
+  deliveredProc1.photoBeforeIds = [deliveredBefore.id];
+  deliveredProc1.photoAfterIds = [deliveredAfter.id];
 
   const photos: PrepPhoto[] = [
     {
@@ -179,9 +281,9 @@ export async function ensureSeedData(): Promise<void> {
       dataUrl: makeSketchDataUrl('清修后 · FP-2024-0031', '#3f5a4a'),
       capturedAt: now - 9 * day,
     },
+    deliveredBefore,
+    deliveredAfter,
   ];
-  procedures[0].photoBeforeIds = [photos[0].id];
-  procedures[0].photoAfterIds = [photos[1].id];
 
   const supplies: SupplyLot[] = [
     {

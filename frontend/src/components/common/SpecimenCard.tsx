@@ -5,8 +5,11 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
 import Box from '@mui/material/Box';
+import Tooltip from '@mui/material/Tooltip';
+import LockIcon from '@mui/icons-material/Lock';
 import type { ReactNode } from 'react';
 import type { Specimen } from '../../types/specimen';
+import { isSpecimenArchived } from '../../types/specimen';
 import { hardnessLabel, mmToInch } from '../../utils/unitConvert';
 
 export interface SpecimenCardProps {
@@ -30,6 +33,7 @@ const STATUS_TONE: Record<string, 'default' | 'info' | 'warning' | 'success'> = 
  */
 export function SpecimenCard({ item, onOpen, footer, selected = false }: SpecimenCardProps) {
   const hardness = hardnessLabel(item.matrixHardness);
+  const archived = isSpecimenArchived(item);
   const body = (
     <CardContent>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
@@ -37,6 +41,11 @@ export function SpecimenCard({ item, onOpen, footer, selected = false }: Specime
           {item.specimenNo}
         </Typography>
         <Chip size="small" label={item.status} color={STATUS_TONE[item.status] ?? 'default'} />
+        {archived ? (
+          <Tooltip title="已交付归档，档案只读">
+            <LockIcon fontSize="small" color="action" />
+          </Tooltip>
+        ) : null}
         <Chip size="small" variant="outlined" label={hardness.label} />
       </Stack>
       <Typography variant="body2" color="text.secondary" noWrap title={item.taxon}>
